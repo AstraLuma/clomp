@@ -1,0 +1,35 @@
+Inputs:
+* an argv
+* a Clomp object populated with fixtures, commands, subcommands, etc
+
+State:
+* Current command
+* Found fixtures (name -> factory)
+* Fixture flags, with pointers back to the fixtures they came from (names -> (object, fixture, variable name))
+* Command flags
+* if we're parsing named flags
+* if we're descending into subcommands
+* list of postional options for the command
+
+1. start at the entrypoint, set as current command
+2. resolve fixtures and produce the starting set of flags
+3. start iterating through argv:
+    If --:
+        Disable dash parsing
+    If starts with - and named flag parsing is enabled:
+        1. Look up flag, namely if it takes an argument
+        2. Pull argument
+            If optional, check for leading -, possibly put back
+        3. Instantiate value (run through typing) and put in argument bag
+    If matches subcommand name and descending into subcommands:
+        1. Set subcommand as new current command
+        2. Traverse the new fixtures and add them to the set of fixture flags
+        3. Reset the set of command flags
+            1. Check that none of them have values.
+    Otherwise:
+        1. disable descending into subcommands
+        2. Add arg to the list of positional options
+4. Parse list of options into command argument names
+5. Instantiate fixtures in dependency order
+6. merge command flags, options, and fixtures into a kwargs
+7. Invoke the final resolved command

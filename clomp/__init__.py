@@ -42,7 +42,7 @@ class Clomp:
             return func
         return _
 
-    def __call__(self):
+   def __call__(self):
         """
         Do the thing!
         """
