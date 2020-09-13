@@ -20,7 +20,7 @@ lint_task:
     - pip install poetry
     - poetry install
   script:
-    - flake8
+    - poetry run flake8
 
 pep517_task:
   skip: $CIRRUS_BRANCH =~ '.*\.tmp'
@@ -42,4 +42,4 @@ test_task:
     - pip install poetry
     - poetry install
   script:
-    - pytest
+    - poetry run pytest
