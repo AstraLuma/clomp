@@ -1,7 +1,80 @@
 """
 All the algorithms and data structures needed for parsing.
 """
+import collections
 import collections.abc
+import contextlib
+import re
+
+
+# from .accessors import CommandAccessor
+
+
+class Token:
+    pattern = None
+
+    def __init__(self, match):
+        self._match = match
+
+    def __str__(self):
+        return self._match[0]
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self._match!r})"
+
+
+class Stop(Token):
+    pattern = re.compile('--')
+
+
+class ShortArgs(Token):
+    pattern = re.compile('-([a-zA-Z]+)')
+
+    def flags(self):
+        yield from self._match.groups()
+
+
+class LongArg(Token):
+    pattern = re.compile('--([a-zA-Z][-a-zA-Z]*)(?:=(.*))?')
+
+    def flag(self):
+        return self._match.group(1)
+
+    def value(self):
+        """
+        String, empty string, or None.
+        """
+        return self._match.group(2)
+
+
+def tokenize(argv):
+    """
+    Scans an argv and turns it into a series of tokens.
+
+    Generates a sequence of Tokens or strings.
+    """
+    for arg in argv:
+        for T in (Stop, ShortArgs, LongArg):
+            if m := T.pattern.fullmatch(arg):
+                yield T(m)
+                break
+        else:
+            yield arg
+
+
+def half_baked(tokes):
+    """
+    Handles Stop
+    """
+    tokes = iter(tokes)
+    for t in tokes:
+        if isinstance(t, Stop):
+            break
+        else:
+            yield t
+
+    for t in tokes:
+        yield str(t)
 
 
 class ReversibleIterator:
@@ -59,71 +132,78 @@ class FlagIndex(collections.abc.Mapping):
 
             self.command_flags[flag.name] = flag
 
-    # def put_value(self, flag, value):
-    #     """
-    #     Save the value for a given flag.
-    #     """
-    #     ...
+    def put_value(self, flag, value):
+        """
+        Save the value for a given flag.
+        """
+        ...
+
+    @contextlib.contextmanager
+    def value_accessors(self, flag):
+        yield ..., ...
 
     def __getitem__(self, flagname):
         ...
 
     def __iter__(self):
-        ...
+        yield from self.component_flags
+        yield from self.command_flags
 
     def __len__(self):
-        ...
+        return len(self.component_flags) + len(self.command_flags)
 
 
-def iter_flags(arg):
+ParseResult = collections.namedtuple('ParseResult', [
+    'pargs',  # positional arguments
+    'kwargs',  # dict mapping argument names to their values
+    'components',  # dict mapping component names to their kwargs
+])
+
+
+def parse(clomp, tokes):
     """
-    Breaks up a flag.
-
-    If a double-dash, returns just the arg.
-
-    If a single, produces each letter.
-
-    Dashes are included.
-    """
-    assert arg.startswith('-')
-    if arg.startswith('--'):
-        yield arg
-    else:
-        for letter in arg[1:]:
-            yield f'-{letter}'
-
-
-def _resolve(clomp, argv):
-    """
-    Run the resolution algorithm
+    Takes a clomp object and a half-baked sequence of tokens and produces a
+    ParseResult.
     """
     current_command = clomp._root_command
-    found_fixtures = get_fixtures(current_command)
     flags = FlagIndex()
     flags.change_command(current_command)
-    dash_parsing = True
     descending_enabled = True
     command_options = []
 
     argv = ReversibleIterator(argv)
-    for arg in argv:
-        if arg == '--':
-            dash_parsing = False
-        elif dash_parsing and arg.startswith('-'):
-            for flagname in iter_flags(arg):
+    for token in tokes:
+        if isinstance(arg, (ShortArgs, LongArg)):
+            if isinstance(arg, ShortArgs):
+                flags = [
+                    (f'-{a}', None)
+                    for a in arg.flags()
+                ]
+            else:
+                flags = [
+                    (f'--{arg.flag()}', arg.value())
+                ]
+            for flagname, value in flags:
                 flagobj = flags[flagname]
-                value = flagobj.call_action(argv)
-                flags.set_value(value)
-        elif descending_enabled and arg in current_command.__children:
-            current_command = current_command.__children[arg]
+                with flags.value_accessors(flagname) as (getter, setter):
+                    curvalue = getter()
+                    given_value = value
+                    newvalue = flagobj.call_action(...)
+                    setter(newvalue)
+        elif descending_enabled and arg in current_command.children:
+            current_command = current_command.children[arg]
             flags.change_command(current_command)
         else:
             descending_enabled = False
             command_options.append(arg)
 
+    return ParseResult(
+        command_options,
+        ...,
+        ...,
+    )
+
     # TODO: Parse command_options into command args
     # TODO: Instantiate fixtures
     # TODO: Merge command flags, command options, and fixtures into kwargs
     # TODO: Call the command
-
- 
