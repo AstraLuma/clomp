@@ -13,14 +13,26 @@ import re
 class Token:
     pattern = None
 
-    def __init__(self, match):
-        self._match = match
+    def __init__(self, match=None, **attrs):
+        assert bool(match) ^ bool(attrs)
+        if match is not None:
+            self.text = match.group(0)
+            vars(self).update(match.groupdict())
+        else:
+            vars(self).update(attrs)
 
     def __str__(self):
-        return self._match[0]
+        return self.text
 
     def __repr__(self):
-        return f"{type(self).__name__}({self._match!r})"
+        attrs = ' '.join(f"{name}={value!r}" for name, value in vars(self).items())
+        return f"<{type(self).__name__} {attrs}>"
+
+    def __eq__(self, other):
+        try:
+            return vars(self) == vars(other)
+        except TypeError:  # missing __dict__
+            return False
 
 
 class Stop(Token):
@@ -28,23 +40,11 @@ class Stop(Token):
 
 
 class ShortArgs(Token):
-    pattern = re.compile('-([a-zA-Z]+)')
-
-    def flags(self):
-        yield from self._match.groups()
+    pattern = re.compile('-(?P<flags>[a-zA-Z]+)')
 
 
 class LongArg(Token):
-    pattern = re.compile('--([a-zA-Z][-a-zA-Z]*)(?:=(.*))?')
-
-    def flag(self):
-        return self._match.group(1)
-
-    def value(self):
-        """
-        String, empty string, or None.
-        """
-        return self._match.group(2)
+    pattern = re.compile('--(?P<flag>[a-zA-Z][-a-zA-Z]*)(?:=(?P<value>.*))?')
 
 
 def tokenize(argv):
